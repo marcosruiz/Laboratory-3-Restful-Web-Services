@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
@@ -39,14 +40,20 @@ public class AddressBookServiceTest {
 		Client client = ClientBuilder.newClient();
 		Response response = client.target("http://localhost:8282/contacts")
 				.request().get();
+		List<Person> l1 = response.readEntity(AddressBook.class).getPersonList();
 		assertEquals(200, response.getStatus());
-		assertEquals(0, response.readEntity(AddressBook.class).getPersonList()
-				.size());
+		assertEquals(0, l1.size());
 
 		//////////////////////////////////////////////////////////////////////
 		// Verify that GET /contacts is well implemented by the service, i.e
 		// test that it is safe and idempotent
-		//////////////////////////////////////////////////////////////////////	
+		//////////////////////////////////////////////////////////////////////
+
+		//Check GET is safe and idempotent
+		response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l2 = response.readEntity(AddressBook.class).getPersonList();
+		assertEquals(l1,l2);
 	}
 
 	@Test
@@ -55,14 +62,19 @@ public class AddressBookServiceTest {
 		AddressBook ab = new AddressBook();
 		launchServer(ab);
 
+		// Get list
+		Client client = ClientBuilder.newClient();
+		Response response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l1 = response.readEntity(AddressBook.class).getPersonList();
+
 		// Prepare data
 		Person juan = new Person();
 		juan.setName("Juan");
 		URI juanURI = URI.create("http://localhost:8282/contacts/person/1");
 
 		// Create a new user
-		Client client = ClientBuilder.newClient();
-		Response response = client.target("http://localhost:8282/contacts")
+		response = client.target("http://localhost:8282/contacts")
 				.request(MediaType.APPLICATION_JSON)
 				.post(Entity.entity(juan, MediaType.APPLICATION_JSON));
 
@@ -87,8 +99,25 @@ public class AddressBookServiceTest {
 		//////////////////////////////////////////////////////////////////////
 		// Verify that POST /contacts is well implemented by the service, i.e
 		// test that it is not safe and not idempotent
-		//////////////////////////////////////////////////////////////////////	
-				
+		//////////////////////////////////////////////////////////////////////
+
+		// Check POST is not safe (server's state change)
+		response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l2 = response.readEntity(AddressBook.class).getPersonList();
+		assertNotEquals(l1,l2);
+
+		// Check POST is well implemented
+		response = client.target("http://localhost:8282/contacts")
+				.request(MediaType.APPLICATION_JSON)
+				.post(Entity.entity(juan, MediaType.APPLICATION_JSON));
+		Person juanUpdated2 = response.readEntity(Person.class);
+		//assertEquals(200, response.getStatus()); //I don't know what is the expected result
+		assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
+		assertEquals(juanUpdated.getName(), juanUpdated2.getName());
+		// Check POST is not idempotent (same petitions, diferent results)
+		assertNotEquals(juanUpdated.getId(), juanUpdated2.getId());
+		assertNotEquals(juanURI, juanUpdated2.getHref());
 	}
 
 	@Test
@@ -142,8 +171,17 @@ public class AddressBookServiceTest {
 		//////////////////////////////////////////////////////////////////////
 		// Verify that GET /contacts/person/3 is well implemented by the service, i.e
 		// test that it is safe and idempotent
-		//////////////////////////////////////////////////////////////////////	
-	
+		//////////////////////////////////////////////////////////////////////
+
+		response = client.target("http://localhost:8282/contacts/person/3")
+				.request(MediaType.APPLICATION_JSON).get();
+		Person mariaUpdated2 = response.readEntity(Person.class);
+
+		assertEquals(200, response.getStatus());
+		assertEquals(MediaType.APPLICATION_JSON_TYPE, response.getMediaType());
+		assertEquals(mariaUpdated.getName(), mariaUpdated2.getName());
+		assertEquals(mariaUpdated.getId(), mariaUpdated2.getId());
+		assertEquals(mariaUpdated.getHref(), mariaUpdated2.getHref());
 	}
 
 	@Test
@@ -155,6 +193,8 @@ public class AddressBookServiceTest {
 		salvador.setName("Salvador");
 		Person juan = new Person();
 		juan.setName("Juan");
+		Person marcos = new Person();
+		juan.setName("Marcos");
 		ab.getPersonList().add(salvador);
 		ab.getPersonList().add(juan);
 		launchServer(ab);
@@ -174,8 +214,34 @@ public class AddressBookServiceTest {
 		//////////////////////////////////////////////////////////////////////
 		// Verify that POST is well implemented by the service, i.e
 		// test that it is not safe and not idempotent
-		//////////////////////////////////////////////////////////////////////	
-	
+		//////////////////////////////////////////////////////////////////////
+
+		response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l1 = response.readEntity(AddressBook.class).getPersonList();
+
+		response = client.target("http://localhost:8282/contacts")
+				.request(MediaType.APPLICATION_JSON)
+				.post(Entity.entity(marcos, MediaType.APPLICATION_JSON));
+		assertEquals(201, response.getStatus());
+		response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l2 = response.readEntity(AddressBook.class).getPersonList();
+		//Not safe (server's state don't change)
+		assertNotEquals(l1.size(), l2.size());
+		assertNotEquals(l1, l2);
+		//Not idempotent (same petitions, sames results ever)
+		response = client.target("http://localhost:8282/contacts")
+				.request(MediaType.APPLICATION_JSON)
+				.post(Entity.entity(marcos, MediaType.APPLICATION_JSON));
+		assertEquals(201, response.getStatus());
+		response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l3 = response.readEntity(AddressBook.class).getPersonList();
+		assertNotEquals(l2.size(), l3.size());
+		assertNotEquals(l2, l3);
+
+
 	}
 
 	@Test

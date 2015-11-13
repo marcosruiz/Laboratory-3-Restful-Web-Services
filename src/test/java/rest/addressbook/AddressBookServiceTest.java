@@ -290,11 +290,28 @@ public class AddressBookServiceTest {
 				.put(Entity.entity(maria, MediaType.APPLICATION_JSON));
 		assertEquals(400, response.getStatus());
 
+		response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l1 = response.readEntity(AddressBook.class).getPersonList();
 		//////////////////////////////////////////////////////////////////////
 		// Verify that PUT /contacts/person/2 is well implemented by the service, i.e
 		// test that it is idempotent
 		//////////////////////////////////////////////////////////////////////	
-	
+		response = client.target("http://localhost:8282/contacts/person/3")
+				.request(MediaType.APPLICATION_JSON)
+				.put(Entity.entity(maria, MediaType.APPLICATION_JSON));
+		assertEquals(400, response.getStatus());
+
+		response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l2 = response.readEntity(AddressBook.class).getPersonList();
+		//Idempotent
+		assertEquals(l1.size(), l2.size());
+		for(int i=0;i<l1.size();i++){
+			assertEquals(l1.get(i).getName(),l2.get(i).getName());
+			assertEquals(l1.get(i).getHref(),l2.get(i).getHref());
+			assertEquals(l1.get(i).getId(),l2.get(i).getId());
+		}
 	}
 
 	@Test
@@ -323,11 +340,28 @@ public class AddressBookServiceTest {
 				.request().delete();
 		assertEquals(404, response.getStatus());
 
+		response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l1 = response.readEntity(AddressBook.class).getPersonList();
 		//////////////////////////////////////////////////////////////////////
 		// Verify that DELETE /contacts/person/2 is well implemented by the service, i.e
 		// test that it is idempotent
-		//////////////////////////////////////////////////////////////////////	
+		//////////////////////////////////////////////////////////////////////
+		response = client
+				.target("http://localhost:8282/contacts/person/2").request()
+				.delete();
+		assertNotEquals(204, response.getStatus());//Not safe
 
+		response = client.target("http://localhost:8282/contacts")
+				.request().get();
+		List<Person> l2 = response.readEntity(AddressBook.class).getPersonList();
+		//Idempotent
+		assertEquals(l1.size(), l2.size());
+		for(int i=0;i<l1.size();i++){
+			assertEquals(l1.get(i).getName(),l2.get(i).getName());
+			assertEquals(l1.get(i).getHref(),l2.get(i).getHref());
+			assertEquals(l1.get(i).getId(),l2.get(i).getId());
+		}
 	}
 
 	@Test

@@ -10,3 +10,7 @@ bin/
 .classpath
 .project
 .settings
+
+# Intellij ignored
+.idea/
+*.iml
